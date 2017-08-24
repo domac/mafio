@@ -20,7 +20,7 @@ var Banner = `
 `
 
 //版本号
-const Binary = "0.1.3"
+const Binary = "0.1.4"
 
 //输出版本号信息
 func Verbose(app string) string {

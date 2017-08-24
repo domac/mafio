@@ -38,7 +38,7 @@ var (
 	etcdEndpoint = flagSet.String("etcd-endpoint", "0.0.0.0:2379", "ectd service discovery address")
 	AgentId      = flagSet.String("agent-id", "sky01", "the service name which ectd can find it")
 	AgentGroup   = flagSet.String("agent-group", "net01", "the service group which agent work on")
-	Input        = flagSet.String("input", "stdin", "input plugin")
+	Input        = flagSet.String("input", "tcpdump", "input plugin")
 	Outout       = flagSet.String("output", "stdout", "output plugin")
 	Filter       = flagSet.String("filter", "valid", "filter plugin")
 	FilePath     = flagSet.String("filepath", "", "use for file watch")

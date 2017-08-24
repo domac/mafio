@@ -23,6 +23,31 @@
 			"Rev": "6549b98005f3e4026ad9f50ef7d5011f40ba1397"
 		},
 		{
+			"ImportPath": "github.com/google/gopacket",
+			"Comment": "v1.1.12-18-g24eb854",
+			"Rev": "24eb854d1e62e2496504340dbace901f36c4a643"
+		},
+		{
+			"ImportPath": "github.com/google/gopacket/layers",
+			"Comment": "v1.1.12-18-g24eb854",
+			"Rev": "24eb854d1e62e2496504340dbace901f36c4a643"
+		},
+		{
+			"ImportPath": "github.com/google/gopacket/pcap",
+			"Comment": "v1.1.12-18-g24eb854",
+			"Rev": "24eb854d1e62e2496504340dbace901f36c4a643"
+		},
+		{
+			"ImportPath": "github.com/google/gopacket/tcpassembly",
+			"Comment": "v1.1.12-18-g24eb854",
+			"Rev": "24eb854d1e62e2496504340dbace901f36c4a643"
+		},
+		{
+			"ImportPath": "github.com/google/gopacket/tcpassembly/tcpreader",
+			"Comment": "v1.1.12-18-g24eb854",
+			"Rev": "24eb854d1e62e2496504340dbace901f36c4a643"
+		},
+		{
 			"ImportPath": "github.com/influxdata/influxdb/client",
 			"Comment": "v1.2.1-rc4-84-gc83c742",
 			"Rev": "c83c742b49f2a22ab997081c19ea0fb44f2bb8fc"
