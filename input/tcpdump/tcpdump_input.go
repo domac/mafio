@@ -85,7 +85,13 @@ func (h *httpStream) run() {
 				req.Method, req.URL.String())
 
 			//结果处理
-			h.ctx.Agentd.Inchan <- []byte(result)
+
+			select {
+			case h.ctx.Agentd.Inchan <- []byte(result):
+			default: //读channel撑不住的情况,就放弃当前数据
+				println("drop input pack")
+				continue
+			}
 
 		}
 	}
