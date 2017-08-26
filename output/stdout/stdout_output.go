@@ -19,6 +19,11 @@ func New() *StdoutOutputService {
 func (self *StdoutOutputService) SetContext(ctx *a.Context) {
 	self.agentd = ctx
 }
+
+func (self *StdoutOutputService) Reflesh() {
+
+}
+
 func (self *StdoutOutputService) DoWrite(packets []*p.Packet) {
 
 	for _, pp := range packets {

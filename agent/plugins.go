@@ -26,12 +26,14 @@ func RegistOutput(name string, o OutputService) {
 type InputService interface {
 	SetContext(*Context)
 	StartInput()
+	Reflesh()
 }
 
 //输出服务接口
 type OutputService interface {
 	SetContext(*Context)
 	DoWrite([]*p.Packet)
+	Reflesh()
 }
 
 //过滤服务接口

@@ -20,6 +20,10 @@ func (self *StdinInputService) SetContext(ctx *a.Context) {
 	self.ctx = ctx
 }
 
+func (self *StdinInputService) Reflesh() {
+
+}
+
 func (self *StdinInputService) StartInput() {
 	for i := 0; i < 1; i++ {
 		select {

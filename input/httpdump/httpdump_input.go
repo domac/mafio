@@ -32,6 +32,10 @@ func (self *HttpDumpService) SetContext(ctx *a.Context) {
 	self.ctx = ctx
 }
 
+func (self *HttpDumpService) Reflesh() {
+
+}
+
 func (self *HttpDumpService) StartInput() {
 
 	snaplen := 1600

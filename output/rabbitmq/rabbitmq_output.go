@@ -48,6 +48,10 @@ func (self *RabbitmqOutputService) SetContext(ctx *a.Context) {
 	self.initClient()
 }
 
+func (self *RabbitmqOutputService) Reflesh() {
+
+}
+
 func options2map(opt *a.Options) (result map[string]interface{}) {
 
 	result = make(map[string]interface{})

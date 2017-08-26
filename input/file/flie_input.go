@@ -41,6 +41,10 @@ func (self *FileInputService) SetContext(ctx *a.Context) {
 	self.SinceDBInfos = map[string]*SinceDBInfo{}
 }
 
+func (self *FileInputService) Reflesh() {
+
+}
+
 //开启文件监听
 func (self *FileInputService) StartInput() {
 
