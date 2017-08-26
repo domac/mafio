@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/domac/mafio/util"
 	"io/ioutil"
 	"path/filepath"
@@ -47,32 +48,41 @@ func NewOptions(configFilePath string) *Options {
 
 //加载插件的配置数据
 func (self *Options) LoadPluginsConf(pluginsConf []string) error {
+
 	for _, confPath := range pluginsConf {
 		realPath, _ := filepath.Abs(confPath)
 		if !util.IsExist(realPath) {
 			self.Logger.Warnf("plugin config file didn't exist : %s", realPath)
 			continue
 		}
-
-		b, err := ioutil.ReadFile(realPath)
+		err := self.flushConfig(realPath)
 		if err != nil {
 			continue
 		}
-		content := make(map[string]interface{})
-		err = json.Unmarshal(b, &content)
-
-		if err != nil {
-			continue
-		}
-
-		pluginName, ok := content["@pluginName"]
-		if !ok {
-			continue
-		}
-		key := pluginName.(string)
-		delete(content, "@pluginName")
-		self.PluginsConfigs[key] = content
 	}
 
+	return nil
+}
+
+//读取指定了路径的文件,把内容刷新到全局配置映射中
+func (self *Options) flushConfig(realPath string) error {
+	b, err := ioutil.ReadFile(realPath)
+	if err != nil {
+		return err
+	}
+	content := make(map[string]interface{})
+	err = json.Unmarshal(b, &content)
+	if err != nil {
+		return err
+	}
+	//获取匹配的插件名称
+	pluginName, ok := content["@pluginName"]
+	if !ok {
+		//如果没有配置插件名称, 则任务配置不合法
+		return errors.New("config file didn't include @pluginName: " + realPath)
+	}
+	key := pluginName.(string)
+	//delete(content, "@pluginName")
+	self.PluginsConfigs[key] = content
 	return nil
 }
