@@ -35,10 +35,9 @@ var (
 	MaxWriteChannelSize = flagSet.Int("max-write-channel-size", 4096, "max writeChannel size")
 	MaxWriteBulkSize    = flagSet.Int("max-write-bulk-size", 500, "max writeBulk size")
 
-	etcdEndpoint = flagSet.String("etcd-endpoint", "0.0.0.0:2379", "ectd service discovery address")
-	AgentId      = flagSet.String("agent-id", "sky01", "the service name which ectd can find it")
-	AgentGroup   = flagSet.String("agent-group", "net01", "the service group which agent work on")
-	Input        = flagSet.String("input", "tcpdump", "input plugin")
+	AgentId      = flagSet.String("m-id", "sky01", "the service name which ectd can find it")
+	AgentGroup   = flagSet.String("m-group", "net01", "the service group which agent work on")
+	Input        = flagSet.String("input", "stdin", "input plugin")
 	Outout       = flagSet.String("output", "stdout", "output plugin")
 	Filter       = flagSet.String("filter", "valid", "filter plugin")
 	FilePath     = flagSet.String("filepath", "", "use for file watch")
@@ -89,14 +88,15 @@ func (p *program) Start() error {
 		}
 	}
 
-	opts := agent.NewOptions()
+	opts := agent.NewOptions(*config)
 	options.Resolve(opts, flagSet, cfg)
 
 	//初始化插件注册
 	register.Init()
 
+	pluginsConf := cfg["plugins_config_paths"]
 	//后台进程创建
-	daemon := agent.New(opts)
+	daemon := agent.New(opts, pluginsConf)
 	daemon.Main()
 	p.Agentd = daemon
 	return nil

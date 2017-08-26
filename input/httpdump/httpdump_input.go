@@ -1,4 +1,4 @@
-package tcpdump
+package httpdump
 
 import (
 	"fmt"
@@ -17,22 +17,22 @@ import (
 )
 
 //流量嗅探
-const ModuleName = "tcpdump"
+const ModuleName = "httpdump"
 
 //文件输入服务
-type TcpDumpService struct {
+type HttpDumpService struct {
 	ctx *a.Context
 }
 
-func New() *TcpDumpService {
-	return &TcpDumpService{}
+func New() *HttpDumpService {
+	return &HttpDumpService{}
 }
 
-func (self *TcpDumpService) SetContext(ctx *a.Context) {
+func (self *HttpDumpService) SetContext(ctx *a.Context) {
 	self.ctx = ctx
 }
 
-func (self *TcpDumpService) StartInput() {
+func (self *HttpDumpService) StartInput() {
 
 	snaplen := 1600
 	bpf := "tcp and (dst port 80 or dst port 8080 or dst port 443 or dst port 10029)"
@@ -119,7 +119,7 @@ func getNetDevices() []string {
 
 }
 
-func (self *TcpDumpService) getAssembler() *tcpassembly.Assembler {
+func (self *HttpDumpService) getAssembler() *tcpassembly.Assembler {
 	// 设置 assembly
 	streamFactory := &httpStreamFactory{self.ctx}
 	streamPool := tcpassembly.NewStreamPool(streamFactory)
@@ -128,7 +128,7 @@ func (self *TcpDumpService) getAssembler() *tcpassembly.Assembler {
 }
 
 //开始嗅探
-func (self *TcpDumpService) startTcpDump(snaplen int, bpf string) error {
+func (self *HttpDumpService) startTcpDump(snaplen int, bpf string) error {
 
 	deviceList := getNetDevices()
 	assembler := self.getAssembler()
@@ -141,7 +141,7 @@ func (self *TcpDumpService) startTcpDump(snaplen int, bpf string) error {
 	return nil
 }
 
-func (self *TcpDumpService) capturePackets(faceName string, assembler *tcpassembly.Assembler, snaplen int, filter string) {
+func (self *HttpDumpService) capturePackets(faceName string, assembler *tcpassembly.Assembler, snaplen int, filter string) {
 	handle, err := pcap.OpenLive(faceName, int32(snaplen), true, 500)
 	if err != nil {
 		self.ctx.Logger().Fatal(err)

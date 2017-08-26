@@ -1,0 +1,5 @@
+{
+  "@pluginName": "file",
+  "stdFilePath": "/tmp/hh.txt",
+  "timeout": 15
+}

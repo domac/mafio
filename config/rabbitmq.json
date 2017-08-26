@@ -1,0 +1,5 @@
+{
+    "@pluginName": "rabbitmq",
+    "rmq_address": "amqp://admin:admin@devops-mq-c001.demo.com:5672,amqp://admin:admin@devops-mq-c002.demo.com:5672,amqp://admin:admin@devops-mq-c003.demo.com:5672",
+    "rmq_key": "mafio_queue"
+}

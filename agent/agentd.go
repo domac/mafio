@@ -4,6 +4,7 @@ import (
 	"github.com/domac/mafio/version"
 	"net"
 	"os"
+	"reflect"
 	"sync"
 )
 
@@ -28,8 +29,45 @@ type Agentd struct {
 	paused bool //暂停标识
 }
 
+func convertArg(arg interface{}, kind reflect.Kind) (val reflect.Value, ok bool) {
+	val = reflect.ValueOf(arg)
+	if val.Kind() == kind {
+		ok = true
+	}
+	return
+}
+
+//获取配置
+func convertConfig(arg interface{}) (out []string, ok bool) {
+	//类型转换
+	slice, success := convertArg(arg, reflect.Slice)
+	if !success {
+		ok = false
+		return
+	}
+
+	c := slice.Len()
+	out = make([]string, c)
+	for i := 0; i < c; i++ {
+		tmp := slice.Index(i).Interface()
+		if tmp != nil {
+			//强制转换为字符串
+			out[i] = tmp.(string)
+		}
+	}
+
+	return out, true
+}
+
 //创建后台进程对象
-func New(opts *Options) *Agentd {
+func New(opts *Options, pluginsConf interface{}) *Agentd {
+
+	//加载插件的配置信息
+	configs, ok := convertConfig(pluginsConf)
+	if ok {
+		opts.LoadPluginsConf(configs)
+	}
+
 	a := &Agentd{
 		opts:                      opts,
 		exitChan:                  make(chan int),

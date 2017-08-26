@@ -44,7 +44,13 @@ func (self *FileInputService) SetContext(ctx *a.Context) {
 //开启文件监听
 func (self *FileInputService) StartInput() {
 
-	self.Path = self.ctx.Agentd.GetOptions().FilePath
+	configMap, ok := self.ctx.Agentd.GetOptions().PluginsConfigs[ModuleName]
+	if !ok {
+		self.ctx.Logger().Errorln("could't load config")
+	}
+
+	self.Path = configMap["stdFilePath"].(string)
+
 	self.ctx.Logger().Infof("plugins input filepath %s", self.Path)
 
 	if self.Path == "" {

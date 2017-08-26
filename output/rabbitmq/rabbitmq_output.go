@@ -6,6 +6,7 @@ import (
 	a "github.com/domac/mafio/agent"
 	p "github.com/domac/mafio/packet"
 	"github.com/streadway/amqp"
+	"strings"
 	"time"
 )
 
@@ -43,12 +44,26 @@ func New() *RabbitmqOutputService {
 }
 
 func (self *RabbitmqOutputService) SetContext(ctx *a.Context) {
-	self.initClient()
 	self.ctx = ctx
+	self.initClient()
 }
 
-func options2map(opt *a.Options) map[string]interface{} {
-	return nil
+func options2map(opt *a.Options) (result map[string]interface{}) {
+
+	result = make(map[string]interface{})
+
+	configMap, ok := opt.PluginsConfigs[ModuleName]
+	if !ok {
+		return
+	}
+	result["rmq_key"] = configMap["rmq_key"]
+
+	rmq_address, ok := configMap["rmq_address"]
+	if ok {
+		addr := rmq_address.(string)
+		result["urls"] = strings.Split(addr, ",")
+	}
+	return
 }
 
 func (self *RabbitmqOutputService) initClient() {
@@ -58,13 +73,15 @@ func (self *RabbitmqOutputService) initClient() {
 	opt := options2map(ctxopt)
 
 	if _, ok := opt["urls"]; ok {
-		p_urls := opt["urls"].([]interface{})
+		p_urls := opt["urls"].([]string)
 		urls := []string{}
 		for i := 0; i < len(p_urls); i++ {
-			urls = append(urls, p_urls[i].(string))
+			urls = append(urls, p_urls[i])
 		}
 		self.URLs = urls
 	}
+
+	self.ctx.Logger().Printf("mq connect to %v", self.URLs)
 
 	if _, ok := opt["exchange"]; ok {
 		self.Exchange = opt["exchange"].(string)
