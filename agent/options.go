@@ -25,7 +25,6 @@ type Options struct {
 	Filter string `flag:"filter"`
 
 	//插件参数
-	FilePath     string `flag:"filepath"`
 	InfluxdbAddr string `flag:"influxdb-addr"`
 
 	//插件配置数据
@@ -49,12 +48,26 @@ func NewOptions(configFilePath string) *Options {
 //加载插件的配置数据
 func (self *Options) LoadPluginsConf(pluginsConf []string) error {
 
+	if self.ConfigFilePath == "" {
+		return nil
+	}
+
+	cfp, _ := filepath.Abs(self.ConfigFilePath)
+	//配置文件所在目录信息
+	dir := filepath.Dir(cfp)
+
+	if !util.IsExist(dir) {
+		return errors.New("config path not exist")
+	}
+
 	for _, confPath := range pluginsConf {
-		realPath, _ := filepath.Abs(confPath)
+		//获取相对路径信息
+		realPath := filepath.Join(dir, confPath)
 		if !util.IsExist(realPath) {
 			self.Logger.Warnf("plugin config file didn't exist : %s", realPath)
 			continue
 		}
+		//刷新配置
 		err := self.flushConfig(realPath)
 		if err != nil {
 			continue
