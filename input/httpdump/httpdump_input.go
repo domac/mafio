@@ -21,11 +21,18 @@ const ModuleName = "httpdump"
 
 //文件输入服务
 type HttpDumpService struct {
-	ctx *a.Context
+	ctx              *a.Context
+	PacketDataSource gopacket.PacketDataSource
+	Decoder          gopacket.Decoder
 }
 
 func New() *HttpDumpService {
 	return &HttpDumpService{}
+}
+
+func (self *HttpDumpService) SetPacketDataSource(handle gopacket.PacketDataSource, decoder gopacket.Decoder) {
+	self.PacketDataSource = handle
+	self.Decoder = decoder
 }
 
 func (self *HttpDumpService) SetContext(ctx *a.Context) {
@@ -102,18 +109,22 @@ func (h *httpStream) run() {
 }
 
 //获取要监听的网卡
-func getNetDevices() []string {
+func getDumpInterfaces() []string {
 	devices, _ := pcap.FindAllDevs()
 	interfaces := []string{}
 	for _, device := range devices {
+
+		//不处理没绑定地址的网卡
 		if len(device.Addresses) == 0 {
 			continue
 		}
 
+		//不处理 Looback 网卡
 		if strings.HasPrefix(device.Name, "lo") {
 			continue
 		}
 
+		//如果是绑定的网卡,立刻返回
 		if strings.HasPrefix(device.Name, "bond") {
 			return []string{device.Name}
 		}
@@ -134,18 +145,36 @@ func (self *HttpDumpService) getAssembler() *tcpassembly.Assembler {
 //开始嗅探
 func (self *HttpDumpService) startTcpDump(snaplen int, bpf string) error {
 
-	deviceList := getNetDevices()
+	deviceList := getDumpInterfaces()
 	assembler := self.getAssembler()
 
 	for _, device := range deviceList {
 		self.ctx.Logger().Infof("Net Device : %s", device)
-		go self.capturePackets(device, assembler, snaplen, bpf)
+		go self.dumpHttpPackets(device, assembler, snaplen, bpf)
 	}
 
 	return nil
 }
 
-func (self *HttpDumpService) capturePackets(faceName string, assembler *tcpassembly.Assembler, snaplen int, filter string) {
+//获取dump包的数据通道
+func (self *HttpDumpService) getPacketsChan(packetSource *gopacket.PacketSource) chan gopacket.Packet {
+	sourcePacketsChannel := make(chan gopacket.Packet, 5000)
+	go func() {
+		for {
+			//读当前需要处理的包
+			packet, err := packetSource.NextPacket()
+			if err == io.EOF {
+				return
+			} else if err == nil {
+				sourcePacketsChannel <- packet
+			}
+		}
+	}()
+	return sourcePacketsChannel
+}
+
+//捕获http包
+func (self *HttpDumpService) dumpHttpPackets(faceName string, assembler *tcpassembly.Assembler, snaplen int, filter string) {
 	handle, err := pcap.OpenLive(faceName, int32(snaplen), true, 500)
 	if err != nil {
 		self.ctx.Logger().Fatal(err)
@@ -156,12 +185,17 @@ func (self *HttpDumpService) capturePackets(faceName string, assembler *tcpassem
 	}
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	packets := packetSource.Packets()
+
+	//设置包数据源相关参数
+	self.SetPacketDataSource(handle, handle.LinkType())
+
+	//获取数据包通道
+	packetsChan := self.getPacketsChan(packetSource)
 	ticker := time.Tick(time.Minute)
 
 	for {
 		select {
-		case packet := <-packets:
+		case packet := <-packetsChan:
 			//数据包为空, 代表 pcap文件到结尾了
 			if packet == nil {
 				return
@@ -177,11 +211,11 @@ func (self *HttpDumpService) capturePackets(faceName string, assembler *tcpassem
 			}
 
 			tcp, ok := packet.TransportLayer().(*layers.TCP)
-
 			if !ok {
 				continue
 			}
 
+			//包聚合操作
 			assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
 
 		case <-ticker:
