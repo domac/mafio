@@ -5,6 +5,7 @@ import (
 	a "github.com/domac/mafio/agent"
 
 	"bufio"
+	"errors"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -24,6 +25,8 @@ type HttpDumpService struct {
 	ctx              *a.Context
 	PacketDataSource gopacket.PacketDataSource
 	Decoder          gopacket.Decoder
+
+	requestAssembler *tcpassembly.Assembler
 }
 
 func New() *HttpDumpService {
@@ -85,7 +88,7 @@ func (h *httpStream) run() {
 			// EOF 返回
 			return
 		} else if err != nil {
-			//log.Println("Error reading stream", h.net, h.transport, ":", err)
+
 		} else {
 			result := fmt.Sprintf(
 				"SrcIp:%s\nSrcPort:%s\nDstIp:%s\nDstPort:%s\nMethod:%s\nUrl:%s\n",
@@ -96,6 +99,7 @@ func (h *httpStream) run() {
 				req.Method, req.URL.String())
 
 			//结果处理
+			req.Body.Close()
 
 			select {
 			case h.ctx.Agentd.Inchan <- []byte(result):
@@ -108,18 +112,35 @@ func (h *httpStream) run() {
 	}
 }
 
+func isLoopback(device pcap.Interface) bool {
+	if len(device.Addresses) == 0 {
+		return false
+	}
+
+	switch device.Addresses[0].IP.String() {
+	case "127.0.0.1", "::1":
+		return true
+	}
+
+	return false
+}
+
 //获取要监听的网卡
-func getDumpInterfaces() []string {
-	devices, _ := pcap.FindAllDevs()
+func findDevices() []string {
+	devices, err := pcap.FindAllDevs()
+
+	if err != nil {
+		return []string{}
+	}
+
 	interfaces := []string{}
 	for _, device := range devices {
 
 		//不处理没绑定地址的网卡
-		if len(device.Addresses) == 0 {
+		if len(device.Addresses) == 0 || isLoopback(device) {
 			continue
 		}
 
-		//不处理 Looback 网卡
 		if strings.HasPrefix(device.Name, "lo") {
 			continue
 		}
@@ -134,26 +155,61 @@ func getDumpInterfaces() []string {
 
 }
 
-func (self *HttpDumpService) getAssembler() *tcpassembly.Assembler {
-	// 设置 assembly
-	streamFactory := &httpStreamFactory{self.ctx}
-	streamPool := tcpassembly.NewStreamPool(streamFactory)
-	assembler := tcpassembly.NewAssembler(streamPool)
-	return assembler
-}
-
 //开始嗅探
 func (self *HttpDumpService) startTcpDump(snaplen int, bpf string) error {
 
-	deviceList := getDumpInterfaces()
-	assembler := self.getAssembler()
+	deviceList := findDevices()
+
+	// Set up assemblies
+	requestStreamFactory := &httpStreamFactory{ctx: self.ctx}
+	requestStreamPool := tcpassembly.NewStreamPool(requestStreamFactory)
+	self.requestAssembler = tcpassembly.NewAssembler(requestStreamPool)
 
 	for _, device := range deviceList {
 		self.ctx.Logger().Infof("Net Device : %s", device)
-		go self.dumpHttpPackets(device, assembler, snaplen, bpf)
+		go self.startListen(device, snaplen, bpf)
 	}
 
 	return nil
+}
+
+//捕获http包
+func (self *HttpDumpService) startListen(faceName string, snaplen int, filter string) {
+	handle, err := pcap.OpenLive(faceName, int32(snaplen), true, 500)
+	if err != nil {
+		self.ctx.Logger().Fatal(err)
+		return
+	}
+
+	if handle != nil {
+		defer handle.Close()
+	}
+
+	if err := handle.SetBPFFilter(filter); err != nil {
+		self.ctx.Logger().Fatal(err)
+	}
+
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+
+	//设置包数据源相关参数
+	self.SetPacketDataSource(handle, handle.LinkType())
+
+	//获取数据包通道
+	packetsChan := self.getPacketsChan(packetSource)
+	ticker := time.Tick(time.Minute)
+
+	for {
+		select {
+		case packet := <-packetsChan:
+			err = self.processPacket(packet)
+			if err != nil {
+				return
+			}
+		case <-ticker:
+			//每一分钟,自动刷新之前2分钟都处于不活跃的连接信息
+			self.requestAssembler.FlushOlderThan(time.Now().Add(time.Minute * -2))
+		}
+	}
 }
 
 //获取dump包的数据通道
@@ -173,54 +229,14 @@ func (self *HttpDumpService) getPacketsChan(packetSource *gopacket.PacketSource)
 	return sourcePacketsChannel
 }
 
-//捕获http包
-func (self *HttpDumpService) dumpHttpPackets(faceName string, assembler *tcpassembly.Assembler, snaplen int, filter string) {
-	handle, err := pcap.OpenLive(faceName, int32(snaplen), true, 500)
-	if err != nil {
-		self.ctx.Logger().Fatal(err)
+func (self *HttpDumpService) processPacket(packet gopacket.Packet) error {
+	if packet == nil {
+		return errors.New("EOF")
 	}
 
-	if err := handle.SetBPFFilter(filter); err != nil {
-		self.ctx.Logger().Fatal(err)
+	if !(packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeTCP) {
+		tcp := packet.TransportLayer().(*layers.TCP)
+		self.requestAssembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
 	}
-
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-
-	//设置包数据源相关参数
-	self.SetPacketDataSource(handle, handle.LinkType())
-
-	//获取数据包通道
-	packetsChan := self.getPacketsChan(packetSource)
-	ticker := time.Tick(time.Minute)
-
-	for {
-		select {
-		case packet := <-packetsChan:
-			//数据包为空, 代表 pcap文件到结尾了
-			if packet == nil {
-				return
-			}
-
-			if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeTCP {
-				self.ctx.Logger().Println("Unusable packet")
-				continue
-			}
-
-			if packet.TransportLayer() == nil {
-				continue
-			}
-
-			tcp, ok := packet.TransportLayer().(*layers.TCP)
-			if !ok {
-				continue
-			}
-
-			//包聚合操作
-			assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
-
-		case <-ticker:
-			//每一分钟,自动刷新之前2分钟都处于不活跃的连接信息
-			assembler.FlushOlderThan(time.Now().Add(time.Minute * -2))
-		}
-	}
+	return nil
 }
