@@ -50,7 +50,8 @@ func (self *FileInputService) StartInput() {
 
 	configMap, ok := self.ctx.Agentd.GetOptions().PluginsConfigs[ModuleName]
 	if !ok {
-		self.ctx.Logger().Errorln("could't load config")
+		self.ctx.Logger().Errorln("could't load file-input config file")
+		os.Exit(2)
 	}
 
 	self.Path = configMap["stdFilePath"].(string)
