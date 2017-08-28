@@ -6,6 +6,7 @@ import (
 	"github.com/domac/mafio/util"
 	"io/ioutil"
 	"path/filepath"
+	"strings"
 )
 
 //配置选项
@@ -62,7 +63,14 @@ func (self *Options) LoadPluginsConf(pluginsConf []string) error {
 
 	for _, confPath := range pluginsConf {
 		//获取相对路径信息
-		realPath := filepath.Join(dir, confPath)
+		confPath = strings.TrimSpace(confPath)
+		realPath := ""
+		if strings.HasPrefix(confPath, "/") {
+			realPath, _ = filepath.Abs(confPath)
+		} else {
+			realPath = filepath.Join(dir, confPath)
+		}
+
 		if !util.IsExist(realPath) {
 			self.Logger.Warnf("plugin config file didn't exist : %s", realPath)
 			continue
