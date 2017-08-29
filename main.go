@@ -34,6 +34,7 @@ var (
 	MaxReadChannelSize  = flagSet.Int("max-read-channel-size", 4096, "max readChannel size")
 	MaxWriteChannelSize = flagSet.Int("max-write-channel-size", 4096, "max writeChannel size")
 	MaxWriteBulkSize    = flagSet.Int("max-write-bulk-size", 500, "max writeBulk size")
+	sendInterval        = flagSet.Int("send-interval", 500, "send data interval (ms)")
 
 	AgentId      = flagSet.String("m-id", "sky01", "the service name which ectd can find it")
 	AgentGroup   = flagSet.String("m-group", "net01", "the service group which agent work on")

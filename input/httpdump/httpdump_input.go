@@ -20,6 +20,8 @@ import (
 //流量嗅探
 const ModuleName = "httpdump"
 
+var ERR_EOF = errors.New("EOF")
+
 //文件输入服务
 type HttpDumpService struct {
 	ctx              *a.Context
@@ -231,7 +233,7 @@ func (self *HttpDumpService) getPacketsChan(packetSource *gopacket.PacketSource)
 
 func (self *HttpDumpService) processPacket(packet gopacket.Packet) error {
 	if packet == nil {
-		return errors.New("EOF")
+		return ERR_EOF
 	}
 
 	if !(packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeTCP) {

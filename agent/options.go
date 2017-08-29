@@ -17,6 +17,7 @@ type Options struct {
 	MaxReadChannelSize  int    `flag:"max-read-channel-size"`
 	MaxWriteChannelSize int    `flag:"max-write-channel-size"`
 	MaxWriteBulkSize    int    `flag:"max-write-bulk-size"`
+	SendInterval        int    `flag:"send-interval"`
 	AgentId             string `flag:"m-id"`
 	AgentGroup          string `flag:"m-group"`
 	Logger              Logger

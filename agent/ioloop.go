@@ -82,6 +82,10 @@ func (self *Context) messagesPush() {
 	//关闭messageCollectStartedChan, 宣告输出器的初始化工作已经完成
 	//其它工作组件可以往下走
 	close(self.Agentd.messageCollectStartedChan)
+
+	interval := time.Duration(self.Agentd.opts.SendInterval)
+	self.Logger().Infof("send interval : %d ms", interval)
+
 	for {
 		select {
 		case data, ok := <-self.Agentd.Outchan:
@@ -114,8 +118,8 @@ func (self *Context) messagesPush() {
 		case <-self.Agentd.exitChan:
 			goto exit
 		default:
-			//让子弹飞一个会儿
-			time.Sleep(400 * time.Millisecond)
+			//收集数据的时间区间
+			time.Sleep(interval * time.Millisecond)
 		}
 	}
 exit:
