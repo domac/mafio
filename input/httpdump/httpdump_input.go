@@ -29,6 +29,7 @@ type HttpDumpService struct {
 	Decoder          gopacket.Decoder
 
 	requestAssembler *tcpassembly.Assembler
+	httpPorts        []string
 }
 
 func New() *HttpDumpService {
@@ -48,10 +49,21 @@ func (self *HttpDumpService) Reflesh() {
 
 }
 
+func (self *HttpDumpService) checkHttpPort(port string) bool {
+	for _, p := range self.httpPorts {
+		if p == port {
+			return true
+		}
+	}
+	return false
+}
+
 func (self *HttpDumpService) StartInput() {
 
+	self.httpPorts = []string{"80", "443", "10029", "8080"}
 	snaplen := 1600
-	bpf := "tcp and (dst port 80 or dst port 8080 or dst port 443 or dst port 10029)"
+	//bpf := "tcp and (dst port 80 or dst port 8080 or dst port 443 or dst port 10029)"
+	bpf := "tcp and (dst port 80 or dst port 3306 or dst port 443 or dst port 10029)"
 	err := self.startTcpDump(snaplen, bpf)
 	if err != nil {
 		return
@@ -238,7 +250,32 @@ func (self *HttpDumpService) processPacket(packet gopacket.Packet) error {
 
 	if !(packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeTCP) {
 		tcp := packet.TransportLayer().(*layers.TCP)
-		self.requestAssembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
+		dstPort := fmt.Sprintf("%d", tcp.DstPort)
+
+		isHttp := self.checkHttpPort(dstPort)
+
+		if isHttp {
+			self.requestAssembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
+		} else {
+			//处理TCP包
+			srcIp := packet.NetworkLayer().NetworkFlow().Src().String()
+			dstIp := packet.NetworkLayer().NetworkFlow().Dst().String()
+			srcPort := fmt.Sprintf("%d", tcp.SrcPort)
+			result := fmt.Sprintf(
+				"SrcIp:%s\nSrcPort:%s\nDstIp:%s\nDstPort:%s\nMethod:%s\nUrl:%s\n",
+				srcIp,
+				srcPort,
+				dstIp,
+				dstPort,
+				"", "")
+			//结果处理
+			select {
+			case self.ctx.Agentd.Inchan <- []byte(result):
+			default: //读channel撑不住的情况,就放弃当前数据
+				println("drop tcp pack")
+			}
+		}
+
 	}
 	return nil
 }
