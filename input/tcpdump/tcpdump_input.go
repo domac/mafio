@@ -1,11 +1,10 @@
-package httpdump
+package tcpdump
 
 import (
-	"fmt"
-	a "github.com/domac/mafio/agent"
-
 	"bufio"
 	"errors"
+	"fmt"
+	a "github.com/domac/mafio/agent"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -13,12 +12,14 @@ import (
 	"github.com/google/gopacket/tcpassembly/tcpreader"
 	"io"
 	"net/http"
+	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
 
 //流量嗅探
-const ModuleName = "httpdump"
+const ModuleName = "tcpdump"
 
 var ERR_EOF = errors.New("EOF")
 
@@ -30,6 +31,7 @@ type HttpDumpService struct {
 
 	requestAssembler *tcpassembly.Assembler
 	httpPorts        []string
+	tcpPorts         []string
 }
 
 func New() *HttpDumpService {
@@ -49,21 +51,37 @@ func (self *HttpDumpService) Reflesh() {
 
 }
 
-func (self *HttpDumpService) checkHttpPort(port string) bool {
-	for _, p := range self.httpPorts {
-		if p == port {
-			return true
-		}
-	}
-	return false
-}
-
+//开始执行输入
 func (self *HttpDumpService) StartInput() {
-
-	self.httpPorts = []string{"80", "443", "10029", "8080"}
+	self.httpPorts = []string{"80"}
+	self.tcpPorts = []string{""}
 	snaplen := 1600
+	configMap, ok := self.ctx.Agentd.GetOptions().PluginsConfigs[ModuleName]
+	if ok {
+		http_ports, isExist := configMap["http_ports"]
+		if isExist {
+			configHttpPorts, _ := convertConfig(http_ports)
+			self.httpPorts = configHttpPorts
+		}
+
+		tcp_ports, isExist := configMap["tcp_ports"]
+		if isExist {
+			configTcpPorts, _ := convertConfig(tcp_ports)
+			self.tcpPorts = configTcpPorts
+		}
+
+		tmpSnaplen := configMap["snaplen"].(string)
+		snaplen, _ = strconv.Atoi(tmpSnaplen)
+	}
+
+	bpf := self.GenerateBpf()
+
+	self.ctx.Logger().Infof("config http ports : %s", self.httpPorts)
+	self.ctx.Logger().Infof("config tcp ports : %s", self.tcpPorts)
+	self.ctx.Logger().Infof("config snaplen : %d", snaplen)
+	self.ctx.Logger().Infof("config bpf : %s", bpf)
 	//bpf := "tcp and (dst port 80 or dst port 8080 or dst port 443 or dst port 10029)"
-	bpf := "tcp and (dst port 80 or dst port 3306 or dst port 443 or dst port 10029)"
+
 	err := self.startTcpDump(snaplen, bpf)
 	if err != nil {
 		return
@@ -118,7 +136,7 @@ func (h *httpStream) run() {
 			select {
 			case h.ctx.Agentd.Inchan <- []byte(result):
 			default: //读channel撑不住的情况,就放弃当前数据
-				println("drop input pack")
+				println("drop http pack")
 				continue
 			}
 
@@ -278,4 +296,59 @@ func (self *HttpDumpService) processPacket(packet gopacket.Packet) error {
 
 	}
 	return nil
+}
+
+//检查是否http端口
+func (self *HttpDumpService) checkHttpPort(port string) bool {
+	for _, p := range self.httpPorts {
+		if p == port {
+			return true
+		}
+	}
+	return false
+}
+
+func (self *HttpDumpService) GenerateBpf() string {
+	portCondition := []string{}
+
+	for _, hp := range self.httpPorts {
+		portCondition = append(portCondition, fmt.Sprintf("dst port %s", hp))
+	}
+
+	for _, tp := range self.tcpPorts {
+		portCondition = append(portCondition, fmt.Sprintf("dst port %s", tp))
+	}
+	cond := strings.Join(portCondition, " or ")
+	bpf := fmt.Sprintf("tcp and (%s)", cond)
+	return bpf
+}
+
+//获取配置
+func convertConfig(arg interface{}) (out []string, ok bool) {
+	//类型转换
+	slice, success := convertArg(arg, reflect.Slice)
+	if !success {
+		ok = false
+		return
+	}
+
+	c := slice.Len()
+	out = make([]string, c)
+	for i := 0; i < c; i++ {
+		tmp := slice.Index(i).Interface()
+		if tmp != nil {
+			//强制转换为字符串
+			out[i] = tmp.(string)
+		}
+	}
+
+	return out, true
+}
+
+func convertArg(arg interface{}, kind reflect.Kind) (val reflect.Value, ok bool) {
+	val = reflect.ValueOf(arg)
+	if val.Kind() == kind {
+		ok = true
+	}
+	return
 }

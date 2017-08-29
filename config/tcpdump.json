@@ -1,0 +1,13 @@
+{
+    "@pluginName": "tcpdump",
+    "snaplen": "65535",
+    "http_ports": [
+        "80",
+        "443",
+        "10029",
+        "8080"
+    ],
+    "tcp_ports": [
+        "3306"
+    ]
+}
