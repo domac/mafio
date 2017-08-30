@@ -7,7 +7,8 @@
         "10029",
         "8080"
     ],
-    "tcp_ports": [
-        "3306"
+    "tcp_ports": [],
+    "protocol": [
+        "beam.smp"
     ]
 }
