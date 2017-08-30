@@ -60,6 +60,133 @@ func (self *TcpDumpService) GetInputConfigMap() (map[string]interface{}, bool) {
 	return configMap, ok
 }
 
+//开始执行输入
+func (self *TcpDumpService) StartInput() {
+
+	//初始化需要监控的端口
+	err := self.initListenPort()
+
+	if err != nil {
+		self.ctx.Logger().Errorln(err)
+		os.Exit(2)
+	}
+
+	//生成BPF表达式
+	bpf := self.GenerateBpf()
+
+	self.ctx.Logger().Infof("config http ports : %s", self.httpPorts)
+	self.ctx.Logger().Infof("config tcp ports : %s", self.tcpPorts)
+	self.ctx.Logger().Infof("config snaplen : %d", self.snaplen)
+	self.ctx.Logger().Infof("config ttl per minutes : %d", self.ttlPerMinutes)
+	self.ctx.Logger().Infof("config bpf : %s", bpf)
+
+	//是否需要分钟级别作业
+	if self.ttlPerMinutes > 0 {
+		//作业调度进程
+		jonCron := cron.New()
+		jonCron.Start()
+		//分钟级别任务
+		jonCron.AddFunc("@every 60s", func() {
+			self.ctx.Logger().Infoln("cron job start")
+			err = self.startTcpDump(bpf)
+
+		})
+	} else {
+		//后台进程一直工作
+		self.ctx.Logger().Infoln("daemon job start")
+		err = self.startTcpDump(bpf)
+	}
+
+	if err != nil {
+		return
+	}
+}
+
+//开始嗅探
+func (self *TcpDumpService) startTcpDump(bpf string) error {
+
+	deviceList := findDevices()
+
+	// Set up assemblies
+	requestStreamFactory := &httpStreamFactory{ctx: self.ctx, portMap: self.portMap}
+	requestStreamPool := tcpassembly.NewStreamPool(requestStreamFactory)
+	self.requestAssembler = tcpassembly.NewAssembler(requestStreamPool)
+
+	for _, device := range deviceList {
+		self.ctx.Logger().Infof("Net Device : %s", device)
+		go self.startListen(device, bpf)
+	}
+	return nil
+}
+
+//开始监听
+func (self *TcpDumpService) startListen(faceName string, filter string) {
+
+	//超时上下文
+	timeoutCtx, cancle := context.WithTimeout(context.Background(), time.Duration(self.ttlPerMinutes)*time.Second)
+	defer func() {
+		self.ctx.Logger().Infof("%s listen exit !", faceName)
+		cancle()
+	}()
+
+	handle, err := pcap.OpenLive(faceName, int32(self.snaplen), true, 500)
+	if err != nil {
+		self.ctx.Logger().Fatal(err)
+		return
+	}
+
+	if handle != nil {
+		defer handle.Close()
+	}
+
+	if err := handle.SetBPFFilter(filter); err != nil {
+		self.ctx.Logger().Fatal(err)
+	}
+
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+
+	//设置包数据源相关参数
+	self.SetPacketDataSource(handle, handle.LinkType())
+
+	//获取数据包通道
+	packetsChan := self.getPacketsChan(packetSource)
+
+	//消费dump-packets通道的数据包
+	if self.ttlPerMinutes == 0 {
+		ticker := time.Tick(time.Minute)
+		for {
+			select {
+			case packet := <-packetsChan:
+				err = self.processPacket(packet)
+				if err != nil {
+					return
+				}
+			case <-ticker:
+				//每一分钟,自动刷新之前2分钟都处于不活跃的连接信息
+				self.requestAssembler.FlushOlderThan(time.Now().Add(time.Minute * -2))
+			}
+		}
+	} else {
+		//带TTL的情况
+		for {
+			select {
+			case packet := <-packetsChan:
+				err = self.processPacket(packet)
+				if err != nil {
+					return
+				}
+			case <-timeoutCtx.Done():
+				if self.ttlPerMinutes > 0 {
+					self.ctx.Logger().Infof("%s listen stop !", faceName)
+					return
+				}
+
+			}
+		}
+	}
+
+}
+
 //设置监听端口
 func (self *TcpDumpService) initListenPort() error {
 	self.httpPorts = []string{"80"}
@@ -138,134 +265,6 @@ func (self *TcpDumpService) initListenPort() error {
 	return nil
 }
 
-//开始执行输入
-func (self *TcpDumpService) StartInput() {
-
-	//初始化需要监控的端口
-	err := self.initListenPort()
-
-	if err != nil {
-		self.ctx.Logger().Errorln(err)
-		os.Exit(2)
-	}
-
-	//生成BPF表达式
-	bpf := self.GenerateBpf()
-
-	self.ctx.Logger().Infof("config http ports : %s", self.httpPorts)
-	self.ctx.Logger().Infof("config tcp ports : %s", self.tcpPorts)
-	self.ctx.Logger().Infof("config snaplen : %d", self.snaplen)
-	self.ctx.Logger().Infof("config ttl per minutes : %d", self.ttlPerMinutes)
-	self.ctx.Logger().Infof("config bpf : %s", bpf)
-
-	//是否需要分钟级别作业
-	if self.ttlPerMinutes > 0 {
-		//作业调度进程
-		jonCron := cron.New()
-		jonCron.Start()
-		//分钟级别任务
-		jonCron.AddFunc("@every 60s", func() {
-			self.ctx.Logger().Infoln("cron job start")
-			err = self.startTcpDump(bpf)
-
-		})
-	} else {
-		//后台进程一直工作
-		self.ctx.Logger().Infoln("daemon job start")
-		err = self.startTcpDump(bpf)
-	}
-
-	if err != nil {
-		return
-	}
-}
-
-//开始嗅探
-func (self *TcpDumpService) startTcpDump(bpf string) error {
-
-	deviceList := findDevices()
-
-	// Set up assemblies
-	requestStreamFactory := &httpStreamFactory{ctx: self.ctx, portMap: self.portMap}
-	requestStreamPool := tcpassembly.NewStreamPool(requestStreamFactory)
-	self.requestAssembler = tcpassembly.NewAssembler(requestStreamPool)
-
-	for _, device := range deviceList {
-		self.ctx.Logger().Infof("Net Device : %s", device)
-		go self.startListen(device, bpf)
-	}
-	return nil
-}
-
-//开始监听
-func (self *TcpDumpService) startListen(faceName string, filter string) {
-
-	//超时上下文
-
-	timeoutCtx, cancle := context.WithTimeout(context.Background(), time.Duration(self.ttlPerMinutes)*time.Second)
-	defer func() {
-		self.ctx.Logger().Infof("%s listen exit !", faceName)
-		cancle()
-	}()
-
-	handle, err := pcap.OpenLive(faceName, int32(self.snaplen), true, 500)
-	if err != nil {
-		self.ctx.Logger().Fatal(err)
-		return
-	}
-
-	if handle != nil {
-		defer handle.Close()
-	}
-
-	if err := handle.SetBPFFilter(filter); err != nil {
-		self.ctx.Logger().Fatal(err)
-	}
-
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-
-	//设置包数据源相关参数
-	self.SetPacketDataSource(handle, handle.LinkType())
-
-	//获取数据包通道
-	packetsChan := self.getPacketsChan(packetSource)
-
-	//消费dump-packets通道的数据包
-
-	if self.ttlPerMinutes == 0 {
-		ticker := time.Tick(time.Minute)
-		for {
-			select {
-			case packet := <-packetsChan:
-				err = self.processPacket(packet)
-				if err != nil {
-					return
-				}
-			case <-ticker:
-				//每一分钟,自动刷新之前2分钟都处于不活跃的连接信息
-				self.requestAssembler.FlushOlderThan(time.Now().Add(time.Minute * -2))
-			}
-		}
-	} else {
-		for {
-			select {
-			case packet := <-packetsChan:
-				err = self.processPacket(packet)
-				if err != nil {
-					return
-				}
-			case <-timeoutCtx.Done():
-				if self.ttlPerMinutes > 0 {
-					self.ctx.Logger().Infof("%s listen stop !", faceName)
-					return
-				}
-
-			}
-		}
-	}
-
-}
-
 //获取dump包的数据通道
 func (self *TcpDumpService) getPacketsChan(packetSource *gopacket.PacketSource) chan gopacket.Packet {
 	sourcePacketsChannel := make(chan gopacket.Packet, 5000)
@@ -303,8 +302,7 @@ func (self *TcpDumpService) processPacket(packet gopacket.Packet) error {
 			dstIp := packet.NetworkLayer().NetworkFlow().Dst().String()
 			srcPort := fmt.Sprintf("%d", tcp.SrcPort)
 
-			pkgType := "tcp"
-
+			pkgType := "tcp" //默认包类型
 			if pt, ok := self.portMap[dstPort]; ok {
 				pkgType = pt
 			}
@@ -356,7 +354,7 @@ func (self *TcpDumpService) GenerateBpf() string {
 		portCondition = append(portCondition, fmt.Sprintf("dst port %s", tp))
 	}
 
-	//监控组件
+	//监控组件进程
 	for _, targetProcPort := range self.targetProcPorts {
 		portCondition = append(portCondition, fmt.Sprintf("dst port %s", targetProcPort))
 	}
