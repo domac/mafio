@@ -1,7 +1,6 @@
 package tcpdump
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	a "github.com/domac/mafio/agent"
@@ -9,10 +8,8 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/tcpassembly"
-	"github.com/google/gopacket/tcpassembly/tcpreader"
 	"io"
-	"net/http"
-	"reflect"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -24,7 +21,7 @@ const ModuleName = "tcpdump"
 var ERR_EOF = errors.New("EOF")
 
 //文件输入服务
-type HttpDumpService struct {
+type TcpDumpService struct {
 	ctx              *a.Context
 	PacketDataSource gopacket.PacketDataSource
 	Decoder          gopacket.Decoder
@@ -32,31 +29,45 @@ type HttpDumpService struct {
 	requestAssembler *tcpassembly.Assembler
 	httpPorts        []string
 	tcpPorts         []string
+	targetProcPorts  []string
+	portMap          map[string]string
+	snaplen          int
+	ttlPerMinutes    string
 }
 
-func New() *HttpDumpService {
-	return &HttpDumpService{}
+func New() *TcpDumpService {
+	return &TcpDumpService{}
 }
 
-func (self *HttpDumpService) SetPacketDataSource(handle gopacket.PacketDataSource, decoder gopacket.Decoder) {
+func (self *TcpDumpService) SetPacketDataSource(handle gopacket.PacketDataSource, decoder gopacket.Decoder) {
 	self.PacketDataSource = handle
 	self.Decoder = decoder
 }
 
-func (self *HttpDumpService) SetContext(ctx *a.Context) {
+func (self *TcpDumpService) SetContext(ctx *a.Context) {
 	self.ctx = ctx
 }
 
-func (self *HttpDumpService) Reflesh() {
+func (self *TcpDumpService) Reflesh() {
 
 }
 
-//开始执行输入
-func (self *HttpDumpService) StartInput() {
-	self.httpPorts = []string{"80"}
-	self.tcpPorts = []string{""}
-	snaplen := 1600
+//获取input的配置信息
+func (self *TcpDumpService) GetInputConfigMap() (map[string]interface{}, bool) {
 	configMap, ok := self.ctx.Agentd.GetOptions().PluginsConfigs[ModuleName]
+	return configMap, ok
+}
+
+//设置监听端口
+func (self *TcpDumpService) setupListenPort() error {
+	self.httpPorts = []string{"80"}
+	self.tcpPorts = []string{}
+	self.targetProcPorts = []string{}
+	self.portMap = make(map[string]string)
+	self.snaplen = 1600
+	self.ttlPerMinutes = ""
+
+	configMap, ok := self.GetInputConfigMap()
 	if ok {
 		http_ports, isExist := configMap["http_ports"]
 		if isExist {
@@ -70,144 +81,93 @@ func (self *HttpDumpService) StartInput() {
 			self.tcpPorts = configTcpPorts
 		}
 
-		tmpSnaplen := configMap["snaplen"].(string)
-		snaplen, _ = strconv.Atoi(tmpSnaplen)
+		//获取监控组件的信息
+		target_processes, hasProcess := configMap["target_processes"]
+		if hasProcess {
+			target_processes_list, _ := convertConfig(target_processes)
+			for _, processName := range target_processes_list {
+				if processName == "" {
+					continue
+				}
+				processPorts, err := getPortsByProcessName(processName)
+				if err != nil {
+					self.ctx.Logger().Infof(">>>>> target process [%s] found nothing about port", processName)
+					continue
+				}
+				self.ctx.Logger().Infof(">>>>> target process [%s] found port: %s", processName, processPorts)
+				for _, pp := range processPorts {
+					self.portMap[pp] = processName
+					self.targetProcPorts = append(self.targetProcPorts, pp)
+				}
+
+			}
+		}
+
+		tmp_snaplen, snExist := configMap["snaplen"]
+		if snExist {
+			tmpSnaplen := tmp_snaplen.(string)
+			snaplen, _ := strconv.Atoi(tmpSnaplen)
+			self.snaplen = snaplen
+		}
+
+		tmp_ttl, snExist := configMap["ttl_per_minutes"]
+		if snExist {
+			ttl := tmp_ttl.(string)
+			self.ttlPerMinutes = ttl
+		}
+
+	} else {
+		return errors.New("no tcpdump input config file found")
+	}
+	return nil
+}
+
+//开始执行输入
+func (self *TcpDumpService) StartInput() {
+
+	err := self.setupListenPort()
+
+	if err != nil {
+		self.ctx.Logger().Errorln(err)
+		os.Exit(2)
 	}
 
+	//生成BPF表达式
 	bpf := self.GenerateBpf()
 
 	self.ctx.Logger().Infof("config http ports : %s", self.httpPorts)
 	self.ctx.Logger().Infof("config tcp ports : %s", self.tcpPorts)
-	self.ctx.Logger().Infof("config snaplen : %d", snaplen)
+	self.ctx.Logger().Infof("config snaplen : %d", self.snaplen)
+	self.ctx.Logger().Infof("config ttl per minutes : %s", self.ttlPerMinutes)
 	self.ctx.Logger().Infof("config bpf : %s", bpf)
-	//bpf := "tcp and (dst port 80 or dst port 8080 or dst port 443 or dst port 10029)"
 
-	err := self.startTcpDump(snaplen, bpf)
+	err = self.startTcpDump(bpf)
 	if err != nil {
 		return
 	}
 }
 
-//继承 tcpassembly.StreamFactory
-type httpStreamFactory struct {
-	ctx *a.Context
-}
-
-// httpStream 负责处理 http 请求.
-type httpStream struct {
-	net, transport gopacket.Flow
-	r              tcpreader.ReaderStream
-	ctx            *a.Context
-}
-
-func (h *httpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream {
-	hstream := &httpStream{
-		net:       net,
-		transport: transport,
-		r:         tcpreader.NewReaderStream(),
-		ctx:       h.ctx,
-	}
-	go hstream.run()
-
-	return &hstream.r
-}
-
-func (h *httpStream) run() {
-	buf := bufio.NewReader(&h.r)
-	for {
-		req, err := http.ReadRequest(buf)
-		if err == io.EOF {
-			// EOF 返回
-			return
-		} else if err != nil {
-
-		} else {
-			result := fmt.Sprintf(
-				"SrcIp:%s\nSrcPort:%s\nDstIp:%s\nDstPort:%s\nMethod:%s\nUrl:%s\n",
-				h.net.Src().String(),
-				h.transport.Src().String(),
-				h.net.Dst().String(),
-				h.transport.Dst().String(),
-				req.Method, req.URL.String())
-
-			//结果处理
-			req.Body.Close()
-
-			select {
-			case h.ctx.Agentd.Inchan <- []byte(result):
-			default: //读channel撑不住的情况,就放弃当前数据
-				println("drop http pack")
-				continue
-			}
-
-		}
-	}
-}
-
-func isLoopback(device pcap.Interface) bool {
-	if len(device.Addresses) == 0 {
-		return false
-	}
-
-	switch device.Addresses[0].IP.String() {
-	case "127.0.0.1", "::1":
-		return true
-	}
-
-	return false
-}
-
-//获取要监听的网卡
-func findDevices() []string {
-	devices, err := pcap.FindAllDevs()
-
-	if err != nil {
-		return []string{}
-	}
-
-	interfaces := []string{}
-	for _, device := range devices {
-
-		//不处理没绑定地址的网卡
-		if len(device.Addresses) == 0 || isLoopback(device) {
-			continue
-		}
-
-		if strings.HasPrefix(device.Name, "lo") {
-			continue
-		}
-
-		//如果是绑定的网卡,立刻返回
-		if strings.HasPrefix(device.Name, "bond") {
-			return []string{device.Name}
-		}
-		interfaces = append(interfaces, device.Name)
-	}
-	return interfaces
-
-}
-
 //开始嗅探
-func (self *HttpDumpService) startTcpDump(snaplen int, bpf string) error {
+func (self *TcpDumpService) startTcpDump(bpf string) error {
 
 	deviceList := findDevices()
 
 	// Set up assemblies
-	requestStreamFactory := &httpStreamFactory{ctx: self.ctx}
+	requestStreamFactory := &httpStreamFactory{ctx: self.ctx, portMap: self.portMap}
 	requestStreamPool := tcpassembly.NewStreamPool(requestStreamFactory)
 	self.requestAssembler = tcpassembly.NewAssembler(requestStreamPool)
 
 	for _, device := range deviceList {
 		self.ctx.Logger().Infof("Net Device : %s", device)
-		go self.startListen(device, snaplen, bpf)
+		go self.startListen(device, bpf)
 	}
 
 	return nil
 }
 
-//捕获http包
-func (self *HttpDumpService) startListen(faceName string, snaplen int, filter string) {
-	handle, err := pcap.OpenLive(faceName, int32(snaplen), true, 500)
+//开始监听
+func (self *TcpDumpService) startListen(faceName string, filter string) {
+	handle, err := pcap.OpenLive(faceName, int32(self.snaplen), true, 500)
 	if err != nil {
 		self.ctx.Logger().Fatal(err)
 		return
@@ -230,6 +190,7 @@ func (self *HttpDumpService) startListen(faceName string, snaplen int, filter st
 	packetsChan := self.getPacketsChan(packetSource)
 	ticker := time.Tick(time.Minute)
 
+	//消费dump-packets通道的数据包
 	for {
 		select {
 		case packet := <-packetsChan:
@@ -245,7 +206,7 @@ func (self *HttpDumpService) startListen(faceName string, snaplen int, filter st
 }
 
 //获取dump包的数据通道
-func (self *HttpDumpService) getPacketsChan(packetSource *gopacket.PacketSource) chan gopacket.Packet {
+func (self *TcpDumpService) getPacketsChan(packetSource *gopacket.PacketSource) chan gopacket.Packet {
 	sourcePacketsChannel := make(chan gopacket.Packet, 5000)
 	go func() {
 		for {
@@ -261,7 +222,8 @@ func (self *HttpDumpService) getPacketsChan(packetSource *gopacket.PacketSource)
 	return sourcePacketsChannel
 }
 
-func (self *HttpDumpService) processPacket(packet gopacket.Packet) error {
+//数据包处理
+func (self *TcpDumpService) processPacket(packet gopacket.Packet) error {
 	if packet == nil {
 		return ERR_EOF
 	}
@@ -279,13 +241,24 @@ func (self *HttpDumpService) processPacket(packet gopacket.Packet) error {
 			srcIp := packet.NetworkLayer().NetworkFlow().Src().String()
 			dstIp := packet.NetworkLayer().NetworkFlow().Dst().String()
 			srcPort := fmt.Sprintf("%d", tcp.SrcPort)
+
+			pkgType := "tcp"
+
+			if pt, ok := self.portMap[dstPort]; ok {
+				pkgType = pt
+			}
+
 			result := fmt.Sprintf(
-				"SrcIp:%s\nSrcPort:%s\nDstIp:%s\nDstPort:%s\nMethod:%s\nUrl:%s\n",
+				"SrcIp:%s\nSrcPort:%s\nDstIp:%s\nDstPort:%s\nMethod:%s\nUrl:%s\nPkgType:%s\n",
 				srcIp,
 				srcPort,
 				dstIp,
 				dstPort,
-				"", "")
+				"", "",
+				pkgType,
+			)
+
+			//结果处理
 			//结果处理
 			select {
 			case self.ctx.Agentd.Inchan <- []byte(result):
@@ -299,7 +272,7 @@ func (self *HttpDumpService) processPacket(packet gopacket.Packet) error {
 }
 
 //检查是否http端口
-func (self *HttpDumpService) checkHttpPort(port string) bool {
+func (self *TcpDumpService) checkHttpPort(port string) bool {
 	for _, p := range self.httpPorts {
 		if p == port {
 			return true
@@ -308,47 +281,26 @@ func (self *HttpDumpService) checkHttpPort(port string) bool {
 	return false
 }
 
-func (self *HttpDumpService) GenerateBpf() string {
+//生成BPF表达式
+func (self *TcpDumpService) GenerateBpf() string {
 	portCondition := []string{}
 
+	//http
 	for _, hp := range self.httpPorts {
 		portCondition = append(portCondition, fmt.Sprintf("dst port %s", hp))
 	}
 
+	//tcp
 	for _, tp := range self.tcpPorts {
 		portCondition = append(portCondition, fmt.Sprintf("dst port %s", tp))
 	}
+
+	//监控组件
+	for _, targetProcPort := range self.targetProcPorts {
+		portCondition = append(portCondition, fmt.Sprintf("dst port %s", targetProcPort))
+	}
+
 	cond := strings.Join(portCondition, " or ")
 	bpf := fmt.Sprintf("tcp and (%s)", cond)
 	return bpf
-}
-
-//获取配置
-func convertConfig(arg interface{}) (out []string, ok bool) {
-	//类型转换
-	slice, success := convertArg(arg, reflect.Slice)
-	if !success {
-		ok = false
-		return
-	}
-
-	c := slice.Len()
-	out = make([]string, c)
-	for i := 0; i < c; i++ {
-		tmp := slice.Index(i).Interface()
-		if tmp != nil {
-			//强制转换为字符串
-			out[i] = tmp.(string)
-		}
-	}
-
-	return out, true
-}
-
-func convertArg(arg interface{}, kind reflect.Kind) (val reflect.Value, ok bool) {
-	val = reflect.ValueOf(arg)
-	if val.Kind() == kind {
-		ok = true
-	}
-	return
 }
