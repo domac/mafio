@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/domac/mafio",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v74",
+	"GodepVersion": "v79",
 	"Deps": [
 		{
 			"ImportPath": "github.com/BurntSushi/toml",
@@ -115,6 +115,21 @@
 		{
 			"ImportPath": "github.com/rcrowley/go-metrics",
 			"Rev": "1f30fe9094a513ce4c700b9a54458bbb0c96996c"
+		},
+		{
+			"ImportPath": "github.com/robfig/cron",
+			"Comment": "v1-58-g736158d",
+			"Rev": "736158dc09e10f1911ca3a1e1b01f11b566ce5db"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/internal/common",
+			"Comment": "v2.17.07-8-g2a3465e",
+			"Rev": "2a3465ebd9d64e5431af9308a022215d2ba2fc54"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/net",
+			"Comment": "v2.17.07-8-g2a3465e",
+			"Rev": "2a3465ebd9d64e5431af9308a022215d2ba2fc54"
 		},
 		{
 			"ImportPath": "github.com/streadway/amqp",
