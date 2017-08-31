@@ -165,7 +165,7 @@ func (self *TcpDumpService) initListenPort() error {
 	self.targetProcPorts = []string{}
 	self.portMap = make(map[string]string)
 	self.snaplen = 1600
-	self.ttlPerMinutes = 0
+	self.ttlPerMinutes = 10
 
 	configMap, ok := self.GetInputConfigMap()
 
@@ -182,7 +182,7 @@ func (self *TcpDumpService) initListenPort() error {
 		} else {
 			configMap = functionMap
 		}
-
+		ok = true
 	}
 
 	if ok {
@@ -248,7 +248,7 @@ func (self *TcpDumpService) initListenPort() error {
 		}
 
 	} else {
-		return errors.New("no tcpdump input config file found")
+		return errors.New("no tcpdump input config found")
 	}
 	return nil
 }

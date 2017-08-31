@@ -165,8 +165,5 @@ func JsonStringToMap(jstr string) (map[string]interface{}, error) {
 	if err := json.Unmarshal([]byte(jstr), &resultMap); err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("json to map : %v", resultMap)
-
 	return resultMap, nil
 }

@@ -28,9 +28,10 @@ import (
 var (
 	flagSet = flag.NewFlagSet("mafio", flag.ExitOnError)
 
-	showVersion         = flagSet.Bool("version", false, "print version string")                                         //版本
-	httpAddress         = flagSet.String("http-address", "0.0.0.0:10630", "<addr>:<port> to listen on for HTTP clients") //http定义地址
-	config              = flagSet.String("config", "config/base.conf", "path to config file")
+	showVersion = flagSet.Bool("version", false, "print version string") //版本
+	//httpAddress         = flagSet.String("http-address", "0.0.0.0:10630", "<addr>:<port> to listen on for HTTP clients") //http定义地址
+	httpAddress         = flagSet.String("http-address", "", "<addr>:<port> to listen on for HTTP clients") //http定义地址
+	config              = flagSet.String("config", "", "path to config file")
 	MaxReadChannelSize  = flagSet.Int("max-read-channel-size", 4096, "max readChannel size")
 	MaxWriteChannelSize = flagSet.Int("max-write-channel-size", 4096, "max writeChannel size")
 	MaxWriteBulkSize    = flagSet.Int("max-write-bulk-size", 500, "max writeBulk size")

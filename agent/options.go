@@ -37,7 +37,6 @@ type Options struct {
 
 func NewOptions(configFilePath string) *Options {
 	return &Options{
-		HTTPAddress:         "0.0.0.0:10630",
 		AgentId:             "localhost",
 		AgentGroup:          "devops",
 		MaxWriteChannelSize: 4096,

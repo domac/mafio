@@ -6,6 +6,7 @@ import (
 	fi "github.com/domac/mafio/input/file"
 	"github.com/domac/mafio/input/stdin"
 	"github.com/domac/mafio/input/tcpdump"
+	"github.com/domac/mafio/output/logrotator"
 	"github.com/domac/mafio/output/rabbitmq"
 	"github.com/domac/mafio/output/stdout"
 )
@@ -24,4 +25,5 @@ func Init() {
 	//---------- 注册s输出插件
 	a.RegistOutput(stdout.ModuleName, stdout.New())
 	a.RegistOutput(rabbitmq.ModuleName, rabbitmq.New())
+	a.RegistOutput(logrotator.ModuleName, logrotator.New())
 }

@@ -123,20 +123,24 @@ func (self *Agentd) Exit() {
 //Agent主要逻辑入口
 func (self *Agentd) Main() {
 	ctx := &Context{self}
-	httpListener, err := net.Listen("tcp", self.opts.HTTPAddress)
-	if err != nil {
-		self.opts.Logger.Errorf("listen (%s) failed - %s", self.opts.HTTPAddress, err)
-		os.Exit(1)
+
+	//http服务开关
+	if self.opts.HTTPAddress != "" {
+		httpListener, err := net.Listen("tcp", self.opts.HTTPAddress)
+		if err != nil {
+			self.opts.Logger.Errorf("listen (%s) failed - %s", self.opts.HTTPAddress, err)
+			os.Exit(1)
+		}
+		self.Lock()
+		self.httpListener = httpListener
+		self.Unlock()
+		//开启自身的 api 服务端
+		apiServer := newAPIServer(ctx)
+		//开启对外提供的api服务
+		self.waitGroup.Wrap(func() {
+			Serve(self.httpListener, apiServer, "HTTP", self.opts.Logger)
+		})
 	}
-	self.Lock()
-	self.httpListener = httpListener
-	self.Unlock()
-	//开启自身的 api 服务端
-	apiServer := newAPIServer(ctx)
-	//开启对外提供的api服务
-	self.waitGroup.Wrap(func() {
-		Serve(self.httpListener, apiServer, "HTTP", self.opts.Logger)
-	})
 
 	//性能监控(使用influxDB)
 	if self.opts.InfluxdbAddr != "" {
