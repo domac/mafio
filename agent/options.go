@@ -28,6 +28,7 @@ type Options struct {
 
 	//插件参数
 	InfluxdbAddr string `flag:"influxdb-addr"`
+	FormatStr    string `flag:"f"`
 
 	//插件配置数据
 	PluginsConfigs map[string]map[string]interface{}

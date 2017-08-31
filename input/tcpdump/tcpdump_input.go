@@ -32,6 +32,7 @@ type TcpDumpService struct {
 	targetProcPorts  []string
 	portMap          map[string]string
 	snaplen          int
+	ttlPerMinutes    int
 }
 
 func New() *TcpDumpService {
@@ -74,6 +75,7 @@ func (self *TcpDumpService) StartInput() {
 	self.ctx.Logger().Infof("config http ports : %s", self.httpPorts)
 	self.ctx.Logger().Infof("config tcp ports : %s", self.tcpPorts)
 	self.ctx.Logger().Infof("config snaplen : %d", self.snaplen)
+	self.ctx.Logger().Infof("config ttl per minutes : %d", self.ttlPerMinutes)
 	self.ctx.Logger().Infof("config bpf : %s", bpf)
 
 	//后台进程一直工作
@@ -82,6 +84,18 @@ func (self *TcpDumpService) StartInput() {
 
 	if err != nil {
 		return
+	}
+
+	//存在TTL的情况
+	if self.ttlPerMinutes > 0 {
+		quit := make(chan bool)
+		time.AfterFunc(time.Duration(self.ttlPerMinutes)*time.Second, func() {
+			//退出
+			quit <- true
+		})
+		<-quit
+		self.ctx.Logger().Infoln("input exit now")
+		os.Exit(2)
 	}
 }
 
@@ -151,8 +165,26 @@ func (self *TcpDumpService) initListenPort() error {
 	self.targetProcPorts = []string{}
 	self.portMap = make(map[string]string)
 	self.snaplen = 1600
+	self.ttlPerMinutes = 0
 
 	configMap, ok := self.GetInputConfigMap()
+
+	//-f='{"snaplen":"65535","ttl_per_minutes":"15","http_ports":["80","443","8080","10029"],"tcp_ports":[],"target_processes":["kafka","rabbitmq","vms"]}'
+	formatStr := self.ctx.Agentd.GetOptions().FormatStr
+	formatStr = strings.TrimSpace(formatStr)
+
+	//参数化配置
+	if formatStr != "" {
+		self.ctx.Logger().Infof("function string : %s", formatStr)
+		functionMap, err := JsonStringToMap(formatStr)
+		if err != nil {
+			self.ctx.Logger().Errorln(err)
+		} else {
+			configMap = functionMap
+		}
+
+	}
+
 	if ok {
 		http_ports, isExist := configMap["http_ports"]
 		if isExist {
@@ -193,6 +225,26 @@ func (self *TcpDumpService) initListenPort() error {
 			tmpSnaplen := tmp_snaplen.(string)
 			snaplen, _ := strconv.Atoi(tmpSnaplen)
 			self.snaplen = snaplen
+		}
+
+		tmp_ttl, snExist := configMap["ttl_per_minutes"]
+		if snExist {
+			ttlStr := tmp_ttl.(string)
+			//self.ttlPerMinutes = ttl
+			ttlStr = strings.TrimSpace(ttlStr)
+			if ttlStr == "" {
+				self.ttlPerMinutes = 0
+			} else {
+				ttl, err := strconv.Atoi(ttlStr)
+				if err != nil {
+					ttl = 0
+				}
+
+				if ttl >= 50 {
+					ttl = 50
+				}
+				self.ttlPerMinutes = ttl
+			}
 		}
 
 	} else {

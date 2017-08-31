@@ -43,6 +43,8 @@ var (
 	Filter       = flagSet.String("filter", "valid", "filter plugin")
 	FilePath     = flagSet.String("filepath", "", "use for file watch")
 	InfluxDBAddr = flagSet.String("influxdb-addr", "", "influxDB addr to metrics")
+
+	formatStr = flagSet.String("f", "", "function string")
 )
 
 //程序封装
@@ -75,7 +77,7 @@ func (p *program) Start() error {
 	flagSet.Parse(os.Args[1:])
 
 	if *showVersion {
-		fmt.Println(version.Verbose("mafioAget"))
+		fmt.Println(version.Verbose("mafio"))
 		os.Exit(0)
 	}
 

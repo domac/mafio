@@ -1,7 +1,6 @@
 package stdout
 
 import (
-	"fmt"
 	a "github.com/domac/mafio/agent"
 	p "github.com/domac/mafio/packet"
 )
@@ -27,6 +26,6 @@ func (self *StdoutOutputService) Reflesh() {
 func (self *StdoutOutputService) DoWrite(packets []*p.Packet) {
 
 	for _, pp := range packets {
-		fmt.Println("output :", string(pp.Data))
+		println(string(pp.Data))
 	}
 }
