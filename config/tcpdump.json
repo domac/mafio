@@ -1,7 +1,6 @@
 {
     "@pluginName": "tcpdump",
     "snaplen": "65535",
-    "ttl_per_minutes": "0",
     "http_ports": [
         "80",
         "443",
