@@ -3,16 +3,27 @@ package logrotator
 import (
 	a "github.com/domac/mafio/agent"
 	p "github.com/domac/mafio/packet"
+	"github.com/domac/mafio/util"
+	"strings"
 )
 
 const ModuleName = "logr"
 
 type LogROutputService struct {
-	agentd *a.Context
+	ctx    *a.Context
 	writer *RotatingWriter
 }
 
 func New() *LogROutputService {
+	return &LogROutputService{}
+}
+
+func (self *LogROutputService) SetContext(ctx *a.Context) {
+
+	self.ctx = ctx
+
+	//默认输出路径
+	outputPath := "/tmp/test.log"
 
 	opts := &Options{
 		RotateDaily: false,
@@ -20,13 +31,27 @@ func New() *LogROutputService {
 		MaximumSize: 1024 * 1024 * 1024, //1G
 	}
 
-	writer, _ := NewWriter("/tmp/log.txt", opts)
+	formatStr := self.ctx.Agentd.GetOptions().FormatStr
+	formatStr = strings.TrimSpace(formatStr)
 
-	return &LogROutputService{writer: writer}
-}
+	//参数化配置
+	if formatStr != "" {
+		functionMap, err := util.JsonStringToMap(formatStr)
+		if err != nil {
+			self.ctx.Logger().Errorln(err)
+		} else {
+			//参数配置路径
+			logr_path_config, snExist := functionMap["logr_path"]
+			if snExist {
+				outputPath = logr_path_config.(string)
+			}
+		}
+	}
 
-func (self *LogROutputService) SetContext(ctx *a.Context) {
-	self.agentd = ctx
+	ctx.Logger().Infof("logr output path: %s", outputPath)
+
+	writer, _ := NewWriter(outputPath, opts)
+	self.writer = writer
 }
 
 func (self *LogROutputService) Reflesh() {

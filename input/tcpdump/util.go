@@ -1,7 +1,6 @@
 package tcpdump
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	util "github.com/domac/mafio/util"
@@ -158,12 +157,4 @@ func getPortsByProcessName(name string) (ports []string, err error) {
 		}
 	}
 	return
-}
-
-func JsonStringToMap(jstr string) (map[string]interface{}, error) {
-	resultMap := make(map[string]interface{})
-	if err := json.Unmarshal([]byte(jstr), &resultMap); err != nil {
-		return nil, err
-	}
-	return resultMap, nil
 }

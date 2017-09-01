@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -231,4 +232,12 @@ func Interface2Map(value interface{}) (map[string]interface{}, error) {
 		return value.(map[string]interface{}), nil
 	}
 	return nil, errors.New("convert error")
+}
+
+func JsonStringToMap(jstr string) (map[string]interface{}, error) {
+	resultMap := make(map[string]interface{})
+	if err := json.Unmarshal([]byte(jstr), &resultMap); err != nil {
+		return nil, err
+	}
+	return resultMap, nil
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	a "github.com/domac/mafio/agent"
+	"github.com/domac/mafio/util"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -169,14 +170,14 @@ func (self *TcpDumpService) initListenPort() error {
 
 	configMap, ok := self.GetInputConfigMap()
 
-	//-f='{"snaplen":"65535","ttl_per_minutes":"15","http_ports":["80","443","8080","10029"],"tcp_ports":[],"target_processes":["kafka","rabbitmq","vms"]}'
+	//-f='{"logr_path":"/tmp/rr.log","snaplen":"65535","ttl_per_minutes":"15","http_ports":["80","443","8080","10029"],"tcp_ports":[],"target_processes":["kafka","rabbitmq","vms"]}'
 	formatStr := self.ctx.Agentd.GetOptions().FormatStr
 	formatStr = strings.TrimSpace(formatStr)
 
 	//参数化配置
 	if formatStr != "" {
 		self.ctx.Logger().Infof("function string : %s", formatStr)
-		functionMap, err := JsonStringToMap(formatStr)
+		functionMap, err := util.JsonStringToMap(formatStr)
 		if err != nil {
 			self.ctx.Logger().Errorln(err)
 		} else {
