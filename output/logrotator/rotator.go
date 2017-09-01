@@ -3,6 +3,7 @@ package logrotator
 import (
 	"compress/gzip"
 	"fmt"
+	"github.com/domac/mafio/util"
 	"io"
 	"io/ioutil"
 	"os"
@@ -37,7 +38,9 @@ func NewWriter(filename string, opts *Options) (*RotatingWriter, error) {
 
 	_, err := os.Stat(filename)
 	if err != nil {
-		os.Create(filename)
+		dir := filepath.Dir(filename)
+		util.ShellRun("mkdir -p " + dir)
+		util.ShellRun("touch  " + filename)
 	}
 
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_APPEND, 0777)

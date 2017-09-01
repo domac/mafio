@@ -12,6 +12,6 @@
     "target_processes": [
         "kafka",
         "rabbitmq",
-        "vms"
+        "zk"
     ]
 }
