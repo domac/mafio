@@ -34,10 +34,14 @@ type TcpDumpService struct {
 	portMap          map[string]string
 	snaplen          int
 	ttlPerMinutes    int
+
+	quit chan bool
 }
 
 func New() *TcpDumpService {
-	return &TcpDumpService{}
+	return &TcpDumpService{
+		quit: make(chan bool),
+	}
 }
 
 func (self *TcpDumpService) SetPacketDataSource(handle gopacket.PacketDataSource, decoder gopacket.Decoder) {
@@ -89,12 +93,11 @@ func (self *TcpDumpService) StartInput() {
 
 	//存在TTL的情况
 	if self.ttlPerMinutes > 0 {
-		quit := make(chan bool)
 		time.AfterFunc(time.Duration(self.ttlPerMinutes)*time.Second, func() {
 			//退出
-			quit <- true
+			close(self.quit)
 		})
-		<-quit
+		<-self.quit
 		self.ctx.Logger().Infoln("input exit now")
 		os.Exit(2)
 	}
@@ -106,7 +109,7 @@ func (self *TcpDumpService) startTcpDump(bpf string) error {
 	deviceList := findDevices()
 
 	// Set up assemblies
-	requestStreamFactory := &httpStreamFactory{ctx: self.ctx, portMap: self.portMap}
+	requestStreamFactory := &httpStreamFactory{ctx: self.ctx, portMap: self.portMap, quitChan: self.quit}
 	requestStreamPool := tcpassembly.NewStreamPool(requestStreamFactory)
 	self.requestAssembler = tcpassembly.NewAssembler(requestStreamPool)
 
