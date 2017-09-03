@@ -24,9 +24,8 @@ type DumpResult struct {
 
 //继承 tcpassembly.StreamFactory
 type httpStreamFactory struct {
-	ctx      *a.Context
-	portMap  map[string]string
-	quitChan chan bool
+	ctx     *a.Context
+	portMap map[string]string
 }
 
 // httpStream 负责处理 http 请求.
@@ -35,7 +34,6 @@ type httpStream struct {
 	r              tcpreader.ReaderStream
 	ctx            *a.Context
 	portMap        map[string]string
-	quitChan       chan bool
 }
 
 func (h *httpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream {
@@ -45,7 +43,6 @@ func (h *httpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream
 		r:         tcpreader.NewReaderStream(),
 		ctx:       h.ctx,
 		portMap:   h.portMap,
-		quitChan:  h.quitChan,
 	}
 	go hstream.run()
 
@@ -53,6 +50,13 @@ func (h *httpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream
 }
 
 func (h *httpStream) run() {
+
+	defer func() {
+		if e := recover(); e != nil {
+			h.ctx.Logger().Error(e)
+		}
+	}()
+
 	buf := bufio.NewReader(&h.r)
 	for {
 		req, err := http.ReadRequest(buf)
@@ -84,8 +88,6 @@ func (h *httpStream) run() {
 
 			select {
 			case h.ctx.Agentd.Inchan <- []byte(result):
-			case <-h.quitChan:
-				return
 			default: //读channel撑不住的情况,就放弃当前数据
 				println("drop http pack")
 				continue

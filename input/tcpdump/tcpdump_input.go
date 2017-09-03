@@ -109,7 +109,7 @@ func (self *TcpDumpService) startTcpDump(bpf string) error {
 	deviceList := findDevices()
 
 	// Set up assemblies
-	requestStreamFactory := &httpStreamFactory{ctx: self.ctx, portMap: self.portMap, quitChan: self.quit}
+	requestStreamFactory := &httpStreamFactory{ctx: self.ctx, portMap: self.portMap}
 	requestStreamPool := tcpassembly.NewStreamPool(requestStreamFactory)
 	self.requestAssembler = tcpassembly.NewAssembler(requestStreamPool)
 
