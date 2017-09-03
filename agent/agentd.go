@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 	"sync"
+	"time"
 )
 
 //*****************************************
@@ -117,6 +118,29 @@ func (self *Agentd) Exit() {
 	close(self.Outchan)
 	self.isExit = true
 	self.waitGroup.Wait()
+}
+
+//强制退出
+func (self *Agentd) SafeExit() {
+	self.opts.Logger.Warnf("agentd program is safe exiting ...")
+	if self.httpListener != nil {
+		self.httpListener.Close()
+	}
+	close(self.exitChan)
+	close(self.Inchan)
+	close(self.Outchan)
+	self.isExit = true
+	//让发送操作完成才退出
+	for {
+		if len(self.Outchan) > 0 {
+			self.opts.Logger.Infoln("wait send finish")
+			time.Sleep(200 * time.Millisecond)
+		} else {
+			self.opts.Logger.Infoln("send finish now")
+			break
+		}
+	}
+	os.Exit(2)
 }
 
 //主程序入口

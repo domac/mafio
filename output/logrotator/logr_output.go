@@ -23,7 +23,7 @@ func (self *LogROutputService) SetContext(ctx *a.Context) {
 	self.ctx = ctx
 
 	//默认输出路径
-	outputPath := "/tmp/test.log"
+	outputPath := "/tmp/dump.log"
 
 	opts := &Options{
 		RotateDaily: false,

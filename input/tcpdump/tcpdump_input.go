@@ -99,7 +99,8 @@ func (self *TcpDumpService) StartInput() {
 		})
 		<-self.quit
 		self.ctx.Logger().Infoln("input exit now")
-		os.Exit(2)
+		//os.Exit(2)
+		self.ctx.Agentd.SafeExit()
 	}
 }
 
