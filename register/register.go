@@ -3,9 +3,11 @@ package register
 import (
 	a "github.com/domac/mafio/agent"
 	valid "github.com/domac/mafio/filter/default"
+	"github.com/domac/mafio/input/cron"
 	fi "github.com/domac/mafio/input/file"
 	"github.com/domac/mafio/input/stdin"
 	"github.com/domac/mafio/input/tcpdump"
+	"github.com/domac/mafio/output/command"
 	"github.com/domac/mafio/output/logrotator"
 	"github.com/domac/mafio/output/rabbitmq"
 	"github.com/domac/mafio/output/stdout"
@@ -18,6 +20,7 @@ func Init() {
 	a.RegistInput(fi.ModuleName, fi.New())
 	a.RegistInput(stdin.ModuleName, stdin.New())
 	a.RegistInput(tcpdump.ModuleName, tcpdump.New())
+	a.RegistInput(cron.ModuleName, cron.New())
 
 	//---------- 注册过滤器插件
 	a.RegistFilter(valid.ModuleName, valid.New())
@@ -26,4 +29,5 @@ func Init() {
 	a.RegistOutput(stdout.ModuleName, stdout.New())
 	a.RegistOutput(rabbitmq.ModuleName, rabbitmq.New())
 	a.RegistOutput(logrotator.ModuleName, logrotator.New())
+	a.RegistOutput(command.ModuleName, command.New())
 }
