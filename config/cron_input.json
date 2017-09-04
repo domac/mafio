@@ -1,0 +1,12 @@
+{
+    "@pluginName": "cron",
+    "cron_map": {
+        "0 */1 * * * ?": [
+            "ps -ef | grep go",
+            "ps -ef | grep main.go"
+        ],
+        "5 */1 * * * ?": [
+            "ps -ef | grep python"
+        ]
+    }
+}
