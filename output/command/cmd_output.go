@@ -31,12 +31,19 @@ func (self *CommandOutputService) cmdCall(cmd string, wg *sync.WaitGroup) {
 	defer func() {
 		wg.Done()
 	}()
+
+	if strings.HasPrefix(cmd, "\"") && strings.HasSuffix(cmd, "\"") {
+		cmd = cmd[1 : len(cmd)-1]
+	}
+
 	self.agentd.Logger().Infof("[%s] start", cmd)
-	res, err := util.ShellString(cmd)
+
+	cmds := []string{"sh", cmd}
+	_, err := util.ScriptRun(cmds, 0)
+
 	if err != nil {
 		self.agentd.Logger().Error(err)
 	}
-	self.agentd.Logger().Infof(res)
 	self.agentd.Logger().Infof("[%s] end", cmd)
 }
 

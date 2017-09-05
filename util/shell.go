@@ -36,3 +36,25 @@ func ShellInt(script string) (result int, err error) {
 	result, err = strconv.Atoi(s)
 	return
 }
+
+//带超时的脚本实现
+func ScriptRun(scripts []string, timeout int64) ([]byte, error) {
+	var cmd *exec.Cmd
+	var b bytes.Buffer
+
+	if timeout > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+		defer cancel()
+		cmd = exec.CommandContext(ctx, scripts[0], scripts[1:]...)
+	} else {
+		cmd = exec.Command(scripts[0], scripts[1:]...)
+	}
+
+	cmd.Stdout = &b
+	cmd.Stderr = &b
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
