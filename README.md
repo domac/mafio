@@ -13,7 +13,7 @@ $ go run main.go
 |__|_|  (____  /__|  |__|\____/ 
       \/     \/     
 
-		   Verson 1.0.3
+		   Verson 0.2.1
 
 ```
 
@@ -33,7 +33,7 @@ $ godep save
 #### 1. 命令方式启动
 
 ```
-go run main.go -input=file -filepath=/tmp/hh.txt
+go run main.go -input=file -output=logr
 ```
 
 #### 2. 配置文件方式
@@ -71,6 +71,8 @@ go run main.go -config=/your/config/file/path
         filter 插件名称 (default "valid")
   -output string
         output 插件名称 (default "stdout")
+  -f  string
+        配置json字符串
   -version
         输出版本信息
 ```
@@ -107,11 +109,11 @@ go run main.go -config=/your/config/file/path
 
 - 采用metrics的方式
 
-    通过参数 -influxdb-addr 设置influxdb后，agent能自动把性能采集的信息发送到influxdb，十分方便！如下图：
+    通过参数 -influxdb-addr 设置influxdb后，agent(mafio)能自动把性能采集的信息发送到influxdb，十分方便！如下图：
 
     ![rs](doc/runsample.png)
 
-    注意：influxDB的数据库名默认为agent的group名。
+    注意：influxDB的数据库名默认为agent(mafio)的group名。
 
 三. 插件化
 
@@ -120,11 +122,11 @@ go run main.go -config=/your/config/file/path
 为了插件的平滑切换，建议插件命名以 name:tag 的规范，举个例子：
 
 (可选)  
-我们写了一个文件读入的input插件, 假如命名为 filereader:V1, 随着业务深入，我们可能需要对原有插件提供额外功能，于是我们可以再写一个input模块，命名为 filereader:V2。这样我们在启动agent的时候，如果V2版本出现问题的时候，我们可以立刻通过 -input=filereader:V1进行 “降级”。这样提高了可读性可理解性。
+我们写了一个文件读入的input插件, 假如命名为 filereader:V1, 随着业务深入，我们可能需要对原有插件提供额外功能，于是我们可以再写一个input模块，命名为 filereader:V2。这样我们在启动agent(mafio)的时候，如果V2版本出现问题的时候，我们可以立刻通过 -input=filereader:V1进行 “降级”。这样提高了可读性可理解性。
 
 四. 容器化
 
-支持通过附带的Dockerfile以容器的方式运行本agent
+支持通过附带的Dockerfile以容器的方式运行本agent(mafio)
 
 ```
 sudo docker build -t mafio:v1 .
@@ -133,3 +135,11 @@ sudo docker build -t mafio:v1 .
 采用Alpine，构建出来的镜像大小只有 29M ，非常轻量级。 这样我们能再节点上运行我们的轻量级容器
 
 ![images](doc/image.png)
+
+## TODO
+
+1.cron调度支持
+
+2.多output支持
+
+3.服务发现
