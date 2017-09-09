@@ -2,5 +2,5 @@
 
 APPLICATION=mafio
 
-nohup ./${APPLICATION} -config=./agent.conf  &
+nohup ./${APPLICATION} -config=./base.conf  &
 ps aux|grep ${APPLICATION}|grep -v grep
