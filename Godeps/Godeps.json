@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/domac/mafio",
-	"GoVersion": "go1.7",
+	"GoVersion": "go1.10",
 	"GodepVersion": "v79",
 	"Deps": [
 		{
@@ -115,6 +115,11 @@
 		{
 			"ImportPath": "github.com/rcrowley/go-metrics",
 			"Rev": "1f30fe9094a513ce4c700b9a54458bbb0c96996c"
+		},
+		{
+			"ImportPath": "github.com/robfig/cron",
+			"Comment": "v1-58-g736158d",
+			"Rev": "736158dc09e10f1911ca3a1e1b01f11b566ce5db"
 		},
 		{
 			"ImportPath": "github.com/shirou/gopsutil/internal/common",
